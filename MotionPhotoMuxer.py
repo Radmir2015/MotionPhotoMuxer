@@ -5,6 +5,30 @@ import sys
 from os.path import exists, basename, isdir
 
 import pyexiv2
+import piexif
+import pyheif
+from PIL import Image
+
+def heif_to_jpeg(heif_file):
+    heif_image = pyheif.read(heif_file)
+    image = Image.frombytes(
+        heif_image.mode, 
+        heif_image.size, 
+        heif_image.data,
+        "raw",
+        heif_image.mode,
+        heif_image.stride,
+        )
+
+    # Retrive the metadata
+    for metadata in heif_image.metadata or []:
+        if metadata['type'] == 'Exif':
+            exif_dict = piexif.load(metadata['data'])
+
+    # PIL rotates the image according to exif info, so it's necessary to remove the orientation tag otherwise the image will be rotated again (1° time from PIL, 2° from viewer).
+    exif_dict['0th'][274] = 0
+    exif_bytes = piexif.dump(exif_dict)
+    return image, exif_bytes
 
 def validate_directory(dir):
     
@@ -29,8 +53,8 @@ def validate_media(photo_path, video_path):
     if not exists(video_path):
         logging.error("Video does not exist: {}".format(video_path))
         return False
-    if not photo_path.lower().endswith(('.jpg', '.jpeg')):
-        logging.error("Photo isn't a JPEG: {}".format(photo_path))
+    if not photo_path.lower().endswith(('.jpg', '.jpeg')) and not photo_path.lower().endswith(('.heic')):
+        logging.error("Photo isn't a JPEG nor HEIC: {}".format(photo_path))
         return False
     if not video_path.lower().endswith(('.mov', '.mp4')):
         logging.error("Video isn't a MOV or MP4: {}".format(photo_path))
@@ -89,6 +113,10 @@ def convert(photo_path, video_path, output_path):
     :param video_path: path to the video to merge
     :return: True if conversion was successful, else False
     """
+    if photo_path.lower().endswith('.heic'):
+        image, exif = heif_to_jpeg(photo_path)
+        photo_path = photo_path.replace('.heic', '.jpg').replace('.HEIC', '.jpg')
+        image.save(photo_path, exif=exif, quality=95, subsampling=0)
     merged = merge_files(photo_path, video_path, output_path)
     photo_filesize = os.path.getsize(photo_path)
     merged_filesize = os.path.getsize(merged)
@@ -130,7 +158,7 @@ def process_directory(file_dir, recurse):
     file_pairs = []
     for file in os.listdir(file_dir):
         file_fullpath = os.path.join(file_dir, file)
-        if os.path.isfile(file_fullpath) and file.lower().endswith(('.jpg', '.jpeg')) and matching_video(
+        if os.path.isfile(file_fullpath) and (file.lower().endswith(('.jpg', '.jpeg')) or file.lower().endswith('.heic')) and matching_video(
                 file_fullpath) != "":
             file_pairs.append((file_fullpath, matching_video(file_fullpath)))
 
