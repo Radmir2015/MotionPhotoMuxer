@@ -7,6 +7,12 @@ MotionPhotoMuxer
 
 Convert Apple Live Photos into Google Motion Photos commonly found on Android phones.
 
+# What's changed in this fork
+
+- HEIC support (using convertion to JPG, it loses a lot in colors and space, but this is likely the only way)
+- It also removes JPG temp files after merging process
+- Progress bar with estimated time
+
 # Installation
 
 As of right now, this script only has one dependency, `py3exiv2`. Unfortunately
